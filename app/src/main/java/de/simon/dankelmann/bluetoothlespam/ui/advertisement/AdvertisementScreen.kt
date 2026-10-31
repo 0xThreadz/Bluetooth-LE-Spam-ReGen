@@ -450,6 +450,7 @@ internal fun advertisementSetSubtitle(advertisementSet: AdvertisementSet): Strin
         AdvertisementSetType.ADVERTISEMENT_TYPE_EASY_SETUP_BUDS -> "Easy Setup Buds"
         AdvertisementSetType.ADVERTISEMENT_TYPE_LOVESPOUSE_PLAY -> "Lovespouse Play"
         AdvertisementSetType.ADVERTISEMENT_TYPE_LOVESPOUSE_STOP -> "Lovespouse Stop"
+        AdvertisementSetType.ADVERTISEMENT_TYPE_CLONED -> "Cloned Device"
     }
 
     val range = when (advertisementSet.range) {

@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.sqlite.db.SupportSQLiteDatabase
 import de.simon.dankelmann.bluetoothlespam.AdvertisementSetGenerators.SwiftPairAdvertisementSetGenerator
 import de.simon.dankelmann.bluetoothlespam.AppContext.AppContext
+import de.simon.dankelmann.bluetoothlespam.Callbacks.GenericAdvertisingCallback
+import de.simon.dankelmann.bluetoothlespam.Callbacks.GenericAdvertisingSetCallback
 import de.simon.dankelmann.bluetoothlespam.Database.AppDatabase
 import de.simon.dankelmann.bluetoothlespam.Database.builtInCollectionDefinitions
 import de.simon.dankelmann.bluetoothlespam.Database.Dao.CollectionWithLists
@@ -19,9 +21,13 @@ import de.simon.dankelmann.bluetoothlespam.Database.Entities.AssociationListSetE
 import de.simon.dankelmann.bluetoothlespam.Database.Entities.AssociatonCollectionListEntity
 import de.simon.dankelmann.bluetoothlespam.Database.Entities.AdvertisingSetParametersEntity
 import de.simon.dankelmann.bluetoothlespam.Database.Entities.PeriodicAdvertisingParametersEntity
+import de.simon.dankelmann.bluetoothlespam.Enums.AdvertiseMode
 import de.simon.dankelmann.bluetoothlespam.Enums.AdvertisementSetRange
 import de.simon.dankelmann.bluetoothlespam.Enums.AdvertisementSetType
 import de.simon.dankelmann.bluetoothlespam.Enums.AdvertisementTarget
+import de.simon.dankelmann.bluetoothlespam.Enums.PrimaryPhy
+import de.simon.dankelmann.bluetoothlespam.Enums.SecondaryPhy
+import de.simon.dankelmann.bluetoothlespam.Enums.TxPowerLevel
 import de.simon.dankelmann.bluetoothlespam.Enums.stringResId
 import de.simon.dankelmann.bluetoothlespam.Helpers.StringHelpers.Companion.toHexString
 import de.simon.dankelmann.bluetoothlespam.Models.AdvertiseData
@@ -30,6 +36,7 @@ import de.simon.dankelmann.bluetoothlespam.Models.AdvertisementSet
 import de.simon.dankelmann.bluetoothlespam.Models.AdvertisementSetCollection
 import de.simon.dankelmann.bluetoothlespam.Models.AdvertisementSetList
 import de.simon.dankelmann.bluetoothlespam.Models.AdvertisingSetParameters
+import de.simon.dankelmann.bluetoothlespam.Models.BluetoothLeScanResult
 import de.simon.dankelmann.bluetoothlespam.Models.ManufacturerSpecificData
 import de.simon.dankelmann.bluetoothlespam.Models.PeriodicAdvertisingParameters
 import de.simon.dankelmann.bluetoothlespam.Models.ServiceData
@@ -159,6 +166,120 @@ class DatabaseHelpers {
 
             // RETURN ID
             return advertiseDataId
+        }
+
+        /** Title of the single, persistent built-in list/custom collection that every device
+         * cloned from the Clone screen gets appended to (see [saveClonedAdvertisementSet]) —
+         * so cloned devices show up for replay exactly like a hand-built custom group, with no
+         * extra UI plumbing needed on the Advertisement Collection screen. */
+        const val CLONED_DEVICES_TITLE = "Cloned Devices"
+
+        /**
+         * Builds a replayable [AdvertisementSet] straight from a captured raw BLE advertisement
+         * ([BluetoothLeScanResult]) — the "Clone" feature's core: whatever service/manufacturer
+         * data a nearby device broadcast (e.g. the pairing pop-up Bluetooth headphones send when
+         * you long-press their button) gets copied byte-for-byte so re-advertising it reproduces
+         * the same pop-up. Settings mirror [SwiftPairAdvertisementSetGenerator] (legacy mode,
+         * high TX power, non-connectable) — sane defaults for replaying an arbitrary captured
+         * payload rather than a specific known protocol.
+         */
+        fun cloneScanResultToAdvertisementSet(scanResult: BluetoothLeScanResult, title: String): AdvertisementSet {
+            val advertisementSet = AdvertisementSet()
+            advertisementSet.title = title
+            advertisementSet.target = AdvertisementTarget.ADVERTISEMENT_TARGET_CLONED
+            advertisementSet.type = AdvertisementSetType.ADVERTISEMENT_TYPE_CLONED
+            advertisementSet.range = AdvertisementSetRange.ADVERTISEMENTSET_RANGE_CLOSE
+
+            advertisementSet.advertiseSettings.advertiseMode = AdvertiseMode.ADVERTISEMODE_LOW_LATENCY
+            advertisementSet.advertiseSettings.txPowerLevel = TxPowerLevel.TX_POWER_HIGH
+            advertisementSet.advertiseSettings.connectable = false
+            advertisementSet.advertiseSettings.timeout = 0
+
+            advertisementSet.advertisingSetParameters.legacyMode = true
+            // Fully qualified: the Models.AdvertisingSetParameters import above (same simple
+            // name) shadows android.bluetooth.le.AdvertisingSetParameters, which is where the
+            // INTERVAL_MIN constant actually lives.
+            advertisementSet.advertisingSetParameters.interval = android.bluetooth.le.AdvertisingSetParameters.INTERVAL_MIN
+            advertisementSet.advertisingSetParameters.txPowerLevel = TxPowerLevel.TX_POWER_HIGH
+            advertisementSet.advertisingSetParameters.primaryPhy = PrimaryPhy.PHY_LE_1M
+            advertisementSet.advertisingSetParameters.secondaryPhy = SecondaryPhy.PHY_LE_1M
+
+            // Device name is sent separately by Android (setIncludeDeviceName) rather than
+            // copied as raw bytes, and most pairing pop-ups (Fast Pair/Swift Pair/Continuity)
+            // don't rely on it -- off by default to keep the clone a faithful byte-for-byte
+            // copy of what was actually captured.
+            advertisementSet.advertiseData.includeDeviceName = false
+            advertisementSet.advertiseData.includeTxPower = false
+
+            scanResult.manufacturerSpecificData.forEach { (manufacturerId, data) ->
+                val manufacturerSpecificData = ManufacturerSpecificData()
+                manufacturerSpecificData.manufacturerId = manufacturerId
+                manufacturerSpecificData.manufacturerSpecificData = data
+                advertisementSet.advertiseData.manufacturerData.add(manufacturerSpecificData)
+            }
+
+            scanResult.serviceUuids.forEach { parcelUuid ->
+                val serviceData = ServiceData()
+                serviceData.serviceUuid = parcelUuid
+                serviceData.serviceData = scanResult.serviceData[parcelUuid]
+                advertisementSet.advertiseData.services.add(serviceData)
+            }
+            // A service UUID can appear in serviceData without being separately advertised in
+            // serviceUuids (some stacks only report it via ScanRecord#getServiceData) -- make
+            // sure its payload isn't silently dropped from the clone.
+            scanResult.serviceData.keys.filter { it !in scanResult.serviceUuids }.forEach { parcelUuid ->
+                val serviceData = ServiceData()
+                serviceData.serviceUuid = parcelUuid
+                serviceData.serviceData = scanResult.serviceData[parcelUuid]
+                advertisementSet.advertiseData.services.add(serviceData)
+            }
+
+            advertisementSet.advertisingSetCallback = GenericAdvertisingSetCallback()
+            advertisementSet.advertisingCallback = GenericAdvertisingCallback()
+
+            return advertisementSet
+        }
+
+        /**
+         * Persists a cloned [AdvertisementSet] (see [cloneScanResultToAdvertisementSet]) and
+         * makes it immediately replayable: saves it like any other set, then appends it to the
+         * single persistent "Cloned Devices" list, creating that list and its wrapping custom
+         * collection on first use. Must be called off the main thread (Room queries).
+         */
+        fun saveClonedAdvertisementSet(advertisementSet: AdvertisementSet): Int {
+            val database = AppDatabase.getInstance()
+
+            val setId = saveAdvertisementSet(advertisementSet)
+
+            val listId = database.advertisementSetListDao().getAll()
+                .firstOrNull { it.title == CLONED_DEVICES_TITLE }?.id
+                ?: database.advertisementSetListDao().insertItem(
+                    AdvertisementSetListEntity(id = 0, title = CLONED_DEVICES_TITLE),
+                ).toInt().also { newListId ->
+                    val collectionId = database.advertisementSetCollectionDao().insertItem(
+                        AdvertisementSetCollectionEntity(id = 0, title = CLONED_DEVICES_TITLE, isCustom = true),
+                    ).toInt()
+                    database.associationCollectionListDao().insertItem(
+                        AssociatonCollectionListEntity(
+                            id = 0,
+                            advertisementSetCollectionId = collectionId,
+                            advertisementSetListId = newListId,
+                            position = 0,
+                        ),
+                    )
+                }
+
+            val nextPosition = database.associationListSetDao().findByListId(listId).size
+            database.associationListSetDao().insertItem(
+                AssociationListSetEntity(
+                    id = 0,
+                    advertisementSetId = setId,
+                    advertisementSetListId = listId,
+                    position = nextPosition,
+                ),
+            )
+
+            return setId
         }
 
         /**

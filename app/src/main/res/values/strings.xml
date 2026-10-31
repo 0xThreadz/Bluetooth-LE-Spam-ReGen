@@ -62,6 +62,7 @@
     <string name="ad_set_type_easy_setup_watch">Easy Setup Watch</string>
     <string name="ad_set_type_lovespouse_play">Lovespouse Play</string>
     <string name="ad_set_type_lovespouse_stop">Lovespouse Stop</string>
+    <string name="ad_set_type_cloned">Cloned Device</string>
 
     <string name="spam_unknown">Unknown Spam</string>
     <string name="spam_detecting_title">Detecting Spam</string>

@@ -18,13 +18,20 @@ open class BluetoothLeScanResult {
     var lastSeen = LocalDateTime.now()
     private val _serviceUuids = mutableListOf<ParcelUuid>()
     private val _manufacturerSpecificData = mutableMapOf<Int, ByteArray>()
-    
+    // Service Data (keyed by Service UUID) — e.g. Fast Pair's model id lives here, not in
+    // manufacturerSpecificData. Needed alongside serviceUuids/manufacturerSpecificData to
+    // faithfully clone an arbitrary advertisement (see CloneScreen / DatabaseHelpers.cloneScanResultToAdvertisementSet).
+    private val _serviceData = mutableMapOf<ParcelUuid, ByteArray>()
+
     val serviceUuids: List<ParcelUuid>
         get() = _serviceUuids
 
     val manufacturerSpecificData: Map<Int, ByteArray>
         get() = _manufacturerSpecificData
-    
+
+    val serviceData: Map<ParcelUuid, ByteArray>
+        get() = _serviceData
+
     fun parseFromBluetoothLeScanResult(bluetoothLeScanResult: BluetoothLeScanResult) {
         deviceName = bluetoothLeScanResult.deviceName
         address = bluetoothLeScanResult.address
@@ -36,6 +43,8 @@ open class BluetoothLeScanResult {
         _serviceUuids.addAll(bluetoothLeScanResult.serviceUuids)
         _manufacturerSpecificData.clear()
         _manufacturerSpecificData.putAll(bluetoothLeScanResult.manufacturerSpecificData)
+        _serviceData.clear()
+        _serviceData.putAll(bluetoothLeScanResult.serviceData)
     }
 
     companion object {
@@ -54,6 +63,12 @@ open class BluetoothLeScanResult {
                 record.manufacturerSpecificData?.let { msd ->
                     msd.forEach { manufacturerId, data ->
                         model._manufacturerSpecificData[manufacturerId] = data
+                    }
+                }
+
+                record.serviceData?.let { serviceData ->
+                    serviceData.forEach { (uuid, data) ->
+                        model._serviceData[uuid] = data
                     }
                 }
             }

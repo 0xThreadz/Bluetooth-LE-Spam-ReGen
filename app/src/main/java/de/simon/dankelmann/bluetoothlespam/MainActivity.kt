@@ -58,6 +58,7 @@ import de.simon.dankelmann.bluetoothlespam.Navigation.SpecterDestinations
 import de.simon.dankelmann.bluetoothlespam.Services.BluetoothLeScanForegroundService
 import de.simon.dankelmann.bluetoothlespam.ui.advertisement.AdvertisementRoute
 import de.simon.dankelmann.bluetoothlespam.ui.advertisementcollection.AdvertisementCollectionRoute
+import de.simon.dankelmann.bluetoothlespam.ui.clone.CloneRoute
 import de.simon.dankelmann.bluetoothlespam.ui.deviceselector.GroupEditorRoute
 import de.simon.dankelmann.bluetoothlespam.ui.preferences.PreferencesRoute
 import de.simon.dankelmann.bluetoothlespam.ui.quickstart.ManageQuickStartRoute
@@ -237,6 +238,7 @@ class MainActivity : AppCompatActivity() {
                                         SpecterDestinations.ADVERTISEMENT_COLLECTION -> AdvertisementCollectionRoute(
                                             onNavigateToAdvertisement = { navController.navigate(SpecterDestinations.ADVERTISEMENT) },
                                             onCreateCustomGroup = { navController.navigate(SpecterDestinations.GROUP_EDITOR) },
+                                            onCloneDevice = { navController.navigate(SpecterDestinations.CLONE) },
                                         )
                                         SpecterDestinations.SPAM_DETECTOR -> SpamDetectorRoute()
                                         SpecterDestinations.PREFERENCES -> PreferencesRoute(onTxPowerClicked = { showSetTxPowerDialog() })
@@ -250,6 +252,7 @@ class MainActivity : AppCompatActivity() {
                             composable(SpecterDestinations.MANAGE_QUICK_START) {
                                 ManageQuickStartRoute()
                             }
+                            composable(SpecterDestinations.CLONE) { CloneRoute() }
                         }
                     }
 
@@ -345,6 +348,7 @@ private val detailRouteTitles = mapOf(
     SpecterDestinations.ADVERTISEMENT to "Advertisement",
     SpecterDestinations.GROUP_EDITOR to "Create custom group",
     SpecterDestinations.MANAGE_QUICK_START to "Manage Quick Start",
+    SpecterDestinations.CLONE to "Clone Device",
 )
 
 @OptIn(ExperimentalMaterial3Api::class)

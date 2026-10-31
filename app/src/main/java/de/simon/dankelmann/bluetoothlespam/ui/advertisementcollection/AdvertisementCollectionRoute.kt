@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 fun AdvertisementCollectionRoute(
     onNavigateToAdvertisement: () -> Unit,
     onCreateCustomGroup: () -> Unit,
+    onCloneDevice: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var customGroups by remember { mutableStateOf<List<AdvertisementSetCollectionEntity>>(emptyList()) }
@@ -51,6 +52,7 @@ fun AdvertisementCollectionRoute(
             )
         },
         onAddClicked = onCreateCustomGroup,
+        onCloneDeviceClicked = onCloneDevice,
     )
 }
 
